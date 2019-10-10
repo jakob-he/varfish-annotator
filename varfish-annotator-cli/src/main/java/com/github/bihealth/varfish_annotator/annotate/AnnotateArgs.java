@@ -65,6 +65,9 @@ public final class AnnotateArgs {
       required = true)
   private String outputDbInfos;
 
+  @Parameter(names = "--output-vcf", description = "Output VCF instead of TSV file")
+  private boolean outputVcf = false;
+
   @Parameter(
       names = "--contig-regex",
       description = "Regular expression to use for selection of contigs")
@@ -110,6 +113,10 @@ public final class AnnotateArgs {
     return outputGts;
   }
 
+  public boolean getOutputVcf() {
+    return outputVcf;
+  }
+
   public String getContigRegex() {
     return contigRegex;
   }
@@ -152,6 +159,9 @@ public final class AnnotateArgs {
         + '\''
         + ", outputDbInfos='"
         + outputDbInfos
+        + '\''
+        + ", outputVcf='"
+        + outputVcf
         + '\''
         + ", contigRegex='"
         + contigRegex

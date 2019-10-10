@@ -8,7 +8,7 @@ import java.sql.SQLException;
 /** Implementation of the <tt>init-db</tt> command. */
 public final class InitDb {
 
-  public static final int VARCHAR_LEN = 1000;
+  public static final int VARCHAR_LEN = 1000000;
 
   /** Configuration for the command. */
   private final InitDbArgs args;
@@ -30,6 +30,10 @@ public final class InitDb {
                 + ";DB_CLOSE_ON_EXIT=FALSE",
             "sa",
             "")) {
+      if (args.getCADDpath() != null) {
+        System.err.println("Importing CADD tabix file");
+        new CADDImporter(conn, args.getCADDpath(), args.getRefPath()).run();
+      }
       if (args.getGnomadExomesPaths() != null && args.getGnomadExomesPaths().size() > 0) {
         System.err.println("Importing gnomAD exomes VCF files...");
         new GnomadExomesImporter(

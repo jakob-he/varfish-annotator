@@ -63,6 +63,9 @@ public final class InitDbArgs {
           "Path to HTMD Public TSV file to use for import, see documentation for more information")
   private String hgmdPublicPath;
 
+  @Parameter(names = "--cadd-path", description = "Path to CADD tabix file")
+  private String caddpath;
+
   @Parameter(names = "--region", description = "Genomic region CHR:START-END (1-based) to import")
   private String genomicRegion;
 
@@ -107,6 +110,10 @@ public final class InitDbArgs {
     return hgmdPublicPath;
   }
 
+  public String getCADDpath() {
+    return caddpath;
+  }
+
   public String getGenomicRegion() {
     return genomicRegion;
   }
@@ -141,6 +148,9 @@ public final class InitDbArgs {
         + clinvarPaths
         + ", hgmdPublicPath='"
         + hgmdPublicPath
+        + '\''
+        + ", caddpath="
+        + caddpath
         + '\''
         + ", genomicRegion='"
         + genomicRegion

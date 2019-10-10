@@ -27,7 +27,12 @@ import de.charite.compbio.jannovar.reference.TranscriptModel;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.Genotype;
 import htsjdk.variant.variantcontext.VariantContext;
+import htsjdk.variant.vcf.VCFConstants;
 import htsjdk.variant.vcf.VCFFileReader;
+import htsjdk.variant.vcf.VCFHeader;
+import htsjdk.variant.vcf.VCFHeaderLine;
+import htsjdk.variant.vcf.VCFHeaderLineType;
+import htsjdk.variant.vcf.VCFInfoHeaderLine;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -62,6 +67,60 @@ public final class AnnotateVcf {
 
   /** Name of table with Thousand Genomes variants. */
   public static final String THOUSAND_GENOMES_PREFIX = "thousand_genomes";
+
+  /** MetaHeader types for VCF output. */
+  public static final ImmutableList<VCFHeaderLineType> META_DESC =
+      ImmutableList.of(
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Flag,
+          VCFHeaderLineType.Float,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Float,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Float,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Float,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Integer,
+          VCFHeaderLineType.Float,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String,
+          VCFHeaderLineType.String);
 
   /** Header fields for the genotypes file. */
   public static final ImmutableList<String> HEADERS_GT =
@@ -101,6 +160,7 @@ public final class AnnotateVcf {
           "gnomad_genomes_homozygous",
           "gnomad_genomes_heterozygous",
           "gnomad_genomes_hemizygous",
+          "cadd_phred_score",
           "refseq_gene_id",
           "refseq_transcript_id",
           "refseq_transcript_coding",
@@ -233,10 +293,30 @@ public final class AnnotateVcf {
       throws VarfishAnnotatorException {
 
     // Write out header.
-    try {
-      gtWriter.append(Joiner.on("\t").join(HEADERS_GT) + "\n");
-    } catch (IOException e) {
-      throw new VarfishAnnotatorException("Could not write out headers", e);
+
+    if (!args.getOutputVcf()) {
+      try {
+        gtWriter.append(Joiner.on("\t").join(HEADERS_GT) + "\n");
+      } catch (IOException e) {
+        throw new VarfishAnnotatorException("Could not write out TSV header", e);
+      }
+    } else {
+      VCFHeader header = reader.getFileHeader();
+      VCFInfoHeaderLine infoline =
+          new VCFInfoHeaderLine("RELEASE", 1, VCFHeaderLineType.String, "reference genome");
+      header.addMetaDataLine(infoline);
+      for (int i = 7; i < HEADERS_GT.size(); i++) {
+        String infodesc = HEADERS_GT.get(i);
+        infoline =
+            new VCFInfoHeaderLine(
+                infodesc.toUpperCase(), 1, META_DESC.get(i), infodesc.replace("_", " "));
+        header.addMetaDataLine(infoline);
+      }
+      try {
+        gtWriter = writeVCFheader(header, gtWriter);
+      } catch (IOException e) {
+        throw new VarfishAnnotatorException("Could not write out VCF header", e);
+      }
     }
 
     final VariantContextAnnotator refseqAnnotator =
@@ -267,6 +347,7 @@ public final class AnnotateVcf {
       if (!ctx.getContig().equals(prevChr)) {
         System.err.println("Now on contig " + ctx.getContig());
       }
+      // System.err.println(ctx.getAttributes());
       annotateVariantContext(
           conn,
           refseqJv.getRefDict(),
@@ -389,6 +470,7 @@ public final class AnnotateVcf {
       final DbInfo thousandGenomesInfo =
           getDbInfo(conn, args.getRelease(), normalizedVar, THOUSAND_GENOMES_PREFIX);
       final boolean inClinvar = getClinVarInfo(conn, args.getRelease(), normalizedVar);
+      final double caddInfo = getCADDInfo(conn, args.getRelease(), normalizedVar);
 
       // Build a list of all gene IDs that we will iterate over later.
       final TreeSet<String> geneIds = new TreeSet<>();
@@ -458,7 +540,8 @@ public final class AnnotateVcf {
 
         final GenotypeCounts gtCounts = buildGenotypeCounts(ctx, i);
 
-        // Construct output record.
+        // Construct TSV output record.
+
         final List<Object> gtOutRec =
             Lists.newArrayList(
                 args.getRelease(),
@@ -503,6 +586,8 @@ public final class AnnotateVcf {
                 gnomadGenomesInfo.getHomTotalStr(),
                 gnomadGenomesInfo.getHetTotalStr(),
                 gnomadGenomesInfo.getHemiTotalStr(),
+                // CADD
+                (caddInfo != 0) ? String.valueOf(caddInfo) : ".",
                 // RefSeq
                 (refseqAnno == null || refseqAnno.getTranscript() == null)
                     ? "."
@@ -561,11 +646,43 @@ public final class AnnotateVcf {
                     ? "{}"
                     : buildEffectsValue(ensemblAnno.getEffects()),
                 (ensemblExonDist >= 0) ? Integer.toString(ensemblExonDist) : ".");
+
+        // Construct VCF output record
+
+        String annos = "";
+
+        for (int idx = 7; idx < gtOutRec.size(); ++idx) {
+          annos += ";" + HEADERS_GT.get(idx).toUpperCase() + "=" + gtOutRec.get(idx);
+        }
+
+        final List<Object> vcfOutRec =
+            Lists.newArrayList(
+                normalizedVar.getChrom(),
+                String.valueOf(normalizedVar.getPos() + 1),
+                String.valueOf(ctx.getID()),
+                String.valueOf(ctx.getPhredScaledQual()),
+                "PASS",
+                ctx.getAttributes().toString().replace("{", "").replace("}", "").replace(", ", ";")
+                    + ";RELEASE="
+                    + args.getRelease()
+                    + annos,
+                "GT",
+                (ctx.getGenotype(i - 1) == null)
+                    ? "."
+                    : ctx.getGenotype(i - 1).getGenotypeString());
         // Write record to output stream.
-        try {
-          gtWriter.append(Joiner.on("\t").join(gtOutRec) + "\n");
-        } catch (IOException e) {
-          throw new VarfishAnnotatorException("Problem writing to genotypes call file.", e);
+        if (!args.getOutputVcf()) {
+          try {
+            gtWriter.append(Joiner.on("\t").join(gtOutRec) + "\n");
+          } catch (IOException e) {
+            throw new VarfishAnnotatorException("Problem writing to genotypes call file.", e);
+          }
+        } else {
+          try {
+            gtWriter.append(Joiner.on("\t").join(vcfOutRec) + "\n");
+          } catch (IOException e) {
+            throw new VarfishAnnotatorException("Problem writing to genotypes call file.", e);
+          }
         }
       }
     }
@@ -859,6 +976,43 @@ public final class AnnotateVcf {
   }
 
   /**
+   * Query for the PHRED CADD scoe of a variant.
+   *
+   * @param conn Database connection to use for query.
+   * @param release Genome release.
+   * @param normalizedVar Normalized variant to query with.
+   * @return {@code double} PHRED scaled score.
+   * @throw VarfishAnnotatorException in case of problems with obtaining information
+   */
+  private double getCADDInfo(Connection conn, String release, VariantDescription normalizedVar)
+      throws VarfishAnnotatorException {
+    final String query =
+        "SELECT PHRED FROM cadd "
+            + "WHERE (release = ?) AND (chrom = ?) AND (start = ?) AND (ref = ?) AND (alt = ?)";
+    try {
+      final PreparedStatement stmt = conn.prepareStatement(query);
+      stmt.setString(1, release);
+      stmt.setString(2, normalizedVar.getChrom());
+      stmt.setInt(3, normalizedVar.getPos() + 1);
+      stmt.setString(4, normalizedVar.getRef());
+      stmt.setString(5, normalizedVar.getAlt());
+
+      double result = 0;
+
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (!rs.next()) {
+          return result;
+        }
+        result = rs.getDouble(1);
+      }
+      return result;
+    } catch (SQLException e) {
+      System.err.println(e);
+      throw new VarfishAnnotatorException("Problem with querying CADD", e);
+    }
+  }
+
+  /**
    * Query ClinVar for information about variant.
    *
    * @param conn Database connection to use for query.
@@ -895,5 +1049,33 @@ public final class AnnotateVcf {
     } catch (SQLException e) {
       throw new VarfishAnnotatorException("Problem with querying ClinVar", e);
     }
+  }
+
+  private FileWriter writeVCFheader(VCFHeader header, FileWriter gtWriter) throws IOException {
+
+    for (final VCFHeaderLine line : header.getMetaDataInSortedOrder()) {
+      gtWriter.append(VCFHeader.METADATA_INDICATOR);
+      gtWriter.append(line.toString());
+      gtWriter.append("\n");
+    }
+    // write out the column line
+    gtWriter.append(VCFHeader.HEADER_INDICATOR);
+    boolean isFirst = true;
+    for (final VCFHeader.HEADER_FIELDS field : header.getHeaderFields()) {
+      if (isFirst) isFirst = false; // don't write out a field separator
+      else gtWriter.append(VCFConstants.FIELD_SEPARATOR);
+      gtWriter.append(field.toString());
+    }
+
+    if (header.hasGenotypingData()) {
+      gtWriter.append(VCFConstants.FIELD_SEPARATOR);
+      gtWriter.append("FORMAT");
+      for (final String sample : header.getGenotypeSamples()) {
+        gtWriter.append(VCFConstants.FIELD_SEPARATOR);
+        gtWriter.append(sample);
+      }
+    }
+    gtWriter.append("\n");
+    return gtWriter;
   }
 }
