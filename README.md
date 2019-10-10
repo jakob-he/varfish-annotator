@@ -13,6 +13,12 @@ Annotation of VCF file for import into VarFish (through Web UI).
 
 ## Example
 
+The CADD tabix files as provided at https://cadd.gs.washington.edu/download have to be converted to VCF files before importing them into the database. The following will convert the CADD tabix file into a VCF file.
+
+```
+bash cadd_tabix_to_vcf.sh whole_genome_SNVs.tsv.gz
+```
+
 The following will create `varfish-annotator-db-1906.h2.db` and fill it.
 
 ```
@@ -51,7 +57,10 @@ The following will create `varfish-annotator-db-1906.h2.db` and fill it.
       done) \
       \
       --db-release-info "hgmd_public:ensembl_r75" \
-      --hgmd-public $DOWNLOAD/GRCh37/hgmd_public/ensembl_r75/HgmdPublicLocus.tsv
+      --hgmd-public $DOWNLOAD/GRCh37/hgmd_public/ensembl_r75/HgmdPublicLocus.tsv \
+      \
+      --db-release-info "CADD_whole_genome:v1.5" \
+      --cadd-path whole_genome_SNVs.vcf.gz
 ```
 
 ## Formatting Source Code
